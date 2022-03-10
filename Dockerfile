@@ -1,31 +1,31 @@
-FROM python:3.9-alpine3.13
+FROM python:3.8-alpine
 LABEL maintainer="djsmanoj0000@gmail.com"
-
-
 ENV PYTHONUNBUFFERED 1
-
 COPY ./requirements.txt /requirements.txt
 COPY ./app /app
 COPY ./scripts /scripts
 WORKDIR /app
 EXPOSE 8000
 
-RUN python -m venv /py && \
-    /py/bin/pip install --upgrade pip && \
-    apk add --update --no-cache postgresql-client && \
-    apk add --update --no-cache --virtual .tmp-deps \
-    build-base postgresql-dev musl-dev linux-headers && \
-    /py/bin/pip install -r /requirements.txt && \
-    apk del .tmp-deps && \
-    adduser --disabled-password --no-create-home app && \
-    mkdir -p /vol/web/static && \
-    mkdir -p /vol/web/media && \
-    chown -R app:app /vol && \
-    chmod -R 755 /vol && \
-    chmod -R +x /scripts
+RUN set -ex \
+    && apk add --no-cache --virtual .build-deps postgresql-dev build-base \
+    && apk add --virtual build-deps gcc python3-dev musl-dev \
+    && apk add --no-cache gcc libc-dev linux-headers \
+    && apk add --no-cache mariadb-dev \
+    && python -m venv /env \
+    && /env/bin/pip install --upgrade pip \
+    && /env/bin/pip install --no-cache-dir -r /requirements.txt \
+    && runDeps="$(scanelf --needed --nobanner --recursive /env \
+    | awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
+    | sort -u \
+    | xargs -r apk info --installed \
+    | sort -u)" \
+    && apk add --virtual rundeps $runDeps \
+    && apk del .build-deps
 
-ENV PATH="/scripts/:/py/bin:$PATH"
+ENV VIRTUAL_ENV /env
+ENV PATH /env/bin:$PATH
 
-USER app
+EXPOSE 8000
 
-CMD ["scripts.sh"]
+CMD ["gunicorn", "--bind", ":8000", "--workers", "3", "app.wsgi"]

@@ -1,4 +1,7 @@
 Django>=3.2.
 django-jazzmin
-psycopg2
-uwsgi
+django-storages
+boto3
+mysqlclient
+uWSGI==2.0.19.1
+gunicorn
